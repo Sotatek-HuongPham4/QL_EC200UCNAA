@@ -68,8 +68,6 @@ recv_cmd	0x55	            0xAA	            0x02	            0x03	    0x03	    0x
 
 */
 
-
-
 /*===========================================================================
                              Functions
  ===========================================================================*/
@@ -102,6 +100,7 @@ void ql_uart_notify_cb(unsigned int ind_type, ql_uart_port_number_e port, unsign
     unsigned char *recv_buff = calloc(1, QL_UART_RX_BUFF_SIZE+1);
     unsigned int real_size = 0;
     int read_len = 0;
+
 
     QL_UART_DEMO_LOG("UART port %d receive ind type:0x%x, receive data size:%d", port, ind_type, size);
     switch(ind_type)
@@ -163,13 +162,24 @@ void ql_uart_notify_cb(unsigned int ind_type, ql_uart_port_number_e port, unsign
     recv_buff = NULL;
 }
 
-void ql_uart_send_task()
+static void ql_uart_recv_task(void *param)
+{
+    ql_uart_register_cb(QL_UART_PORT_1, ql_uart_notify_cb);  
+    // ql_rtos_task_sleep_ms(1000);
+    for(;;)
+    {
+        ql_rtos_task_sleep_ms(1000);
+
+    }
+}
+
+static void ql_uart_send_task(void *param)
 {	
 	ql_uart_tx_status_e tx_status;
 	int write_len = 0;
 
 	unsigned char data_send[9] = {HEADER_HIGH_BYTE_VERSION, HEADER_LOW_BYTE_VERSION, HEADER_BYTE_SLAVE, 
-                                  VER_DATA, ID_DATA, DATA_LEN, HIGH_BYTE_DATA, LOW_BYTE_DATA ,CRC};
+                                  VER_DATA, ID_DATA, DATA_LEN, HIGH_BYTE_DATA, LOW_BYTE_DATA, CRC};
 
     uint8_t data_example = 19;   //example
     char data_hex[3];
@@ -178,13 +188,12 @@ void ql_uart_send_task()
     data_send[7] = strtol(data_hex, NULL, 16);
     data_send[8] = crc8(data_send, 8);
 
-    // unsigned char cmd[6] = {HEADER_HIGH_BYTE_VERSION, HEADER_LOW_BYTE_VERSION, HEADER_BYTE_HOST, VER_CMD, ID_CMD, CRC};
-    // cmd[5] = crc8(cmd, 5);  
+    unsigned char cmd[6] = {HEADER_HIGH_BYTE_VERSION, HEADER_LOW_BYTE_VERSION, HEADER_BYTE_HOST, VER_CMD, ID_CMD, CRC};
+    cmd[5] = crc8(cmd, 5);  
 
 	for(;;)
 	{   
 		write_len = ql_uart_write(QL_UART_PORT_1, data_send, sizeof(data_send));
-
 	    QL_UART_DEMO_LOG("write_len:%d", write_len);
 
         // write_len = ql_uart_write(QL_UART_PORT_1, cmd, sizeof(cmd));
@@ -229,21 +238,19 @@ void ql_uart_init()
     QL_UART_DEMO_LOG("ret: 0x%x", ret);
 }
 
-static void ql_uart_demo_thread(void *param)
-{
-	ql_uart_register_cb(QL_UART_PORT_1, ql_uart_notify_cb);
-	ql_uart_send_task();	   
-}
-
 void ql_uart_app_init(void)
 {
-	QlOSStatus err = 0;
-	ql_task_t uart_task = NULL;
+    QuecOSStatus err;
+    QuecOSStatus er;
+
+	ql_task_t uart_send_task = NULL;
+    ql_task_t uart_recv_task = NULL;
 
 	ql_uart_init();
-
-	err = ql_rtos_task_create(&uart_task, QL_UART_TASK_STACK_SIZE, QL_UART_TASK_PRIO, "QUARTDEMO", ql_uart_demo_thread, NULL, QL_UART_TASK_EVENT_CNT);
-	if (err != QL_OSI_SUCCESS)
+    
+	
+    err = ql_rtos_task_create(&uart_send_task, 1024 * 5, 13, "QUARTDE", ql_uart_send_task, NULL, 7);
+    if (err != QL_OSI_SUCCESS)
 	{
 		QL_UART_DEMO_LOG("demo task created failed");
         return;
@@ -252,6 +259,18 @@ void ql_uart_app_init(void)
     {
         QL_UART_DEMO_LOG("demo task created successful");
     }
+
+    er = ql_rtos_task_create(&uart_recv_task, 16 * 1024, 14, "QUARTDEMO", ql_uart_recv_task, NULL, 6);
+    if (er != QL_OSI_SUCCESS)
+	{
+		QL_UART_DEMO_LOG("demo task created failed");
+        return;
+	}
+    else
+    {
+        QL_UART_DEMO_LOG("demo task created successful");
+    }
+
 }
 
 
