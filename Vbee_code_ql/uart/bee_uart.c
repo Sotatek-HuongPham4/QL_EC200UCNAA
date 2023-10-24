@@ -10,63 +10,8 @@
 #include "ql_api_osi.h"
 #include "ql_log.h"
 #include "ql_uart.h"
-#include "ql_gpio.h"
-#include "ql_pin_cfg.h"
-#include "ql_usb.h"
 
-/*===========================================================================
- *Definition
- ===========================================================================*/
-#define QL_UART_DEMO_LOG_LEVEL			QL_LOG_LEVEL_INFO
-#define QL_UART_DEMO_LOG(msg, ...)		QL_LOG(QL_UART_DEMO_LOG_LEVEL, "ql_uart_demo", msg, ##__VA_ARGS__)
-
-
-#define QL_UART_TASK_STACK_SIZE     		4096
-#define QL_UART_TASK_PRIO          	 	    APP_PRIORITY_NORMAL
-#define QL_UART_TASK_EVENT_CNT      		5
-
-
-#define QL_UART_RX_BUFF_SIZE                2048
-#define QL_UART_TX_BUFF_SIZE                2048
-
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-
-#define QL_USB_PRINTER_ENABLE	0
-
-
-/*===========================================================================
- * Variate
- ===========================================================================*/
-#define HEADER_HIGH_BYTE_VERSION 0x55
-#define HEADER_LOW_BYTE_VERSION  0xaa
-#define CRC                      0x00
-/****************************SEND DATA**************************************/  
-
-#define HEADER_BYTE_SLAVE        0x01
-#define VER_DATA                 0x02   // can change
-#define ID_DATA                  0x03   // can change
-#define DATA_LEN                 0x02   // can change
-#define HIGH_BYTE_DATA           0x00   // can change
-#define LOW_BYTE_DATA            0x00   // can change
-/****************************RECEIVE CMD**************************************/  
-#define HEADER_BYTE_HOST         0x02
-#define VER_CMD                  0x01   // can change
-#define ID_CMD                   0x03   // can change
-
-/****************************FRAME_DATA_RULE_UART****************************/ 
-/*
-
-	    Header_high_byte | Header_low_byte	| Header_byte_slave | Version_data	| ID_data | Data_length | High_byte_data | Low_byte_data | CRC
-send_data	0x55	            0xAA	               0x01	            0x02	    0x03	    0x02	    0x00	            0x13	   0xBD
-
-
-         Header_high_byte	Header_low_byte	   Header_byte_host	    Version_cmd	    ID_cmd	    CRC
-recv_cmd	0x55	            0xAA	            0x02	            0x03	    0x03	    0x8A
-        	0x55	            0xAA	            0x02	            0x01	    0x01	    31
-	        0x55	            0xAA	            0x02	            0x01	    0x02	    62
-	        0x55	            0xAA	            0x02	            0x01	    0x03	    53
-
-*/
+#include "bee_uart.h"
 
 /*===========================================================================
                              Functions
@@ -162,18 +107,7 @@ void ql_uart_notify_cb(unsigned int ind_type, ql_uart_port_number_e port, unsign
     recv_buff = NULL;
 }
 
-static void ql_uart_recv_task(void *param)
-{
-    ql_uart_register_cb(QL_UART_PORT_1, ql_uart_notify_cb);  
-    // ql_rtos_task_sleep_ms(1000);
-    for(;;)
-    {
-        ql_rtos_task_sleep_ms(1000);
-
-    }
-}
-
-static void ql_uart_send_task(void *param)
+ void ql_uart_send_task(void *param)
 {	
 	ql_uart_tx_status_e tx_status;
 	int write_len = 0;
@@ -188,8 +122,8 @@ static void ql_uart_send_task(void *param)
     data_send[7] = strtol(data_hex, NULL, 16);
     data_send[8] = crc8(data_send, 8);
 
-    unsigned char cmd[6] = {HEADER_HIGH_BYTE_VERSION, HEADER_LOW_BYTE_VERSION, HEADER_BYTE_HOST, VER_CMD, ID_CMD, CRC};
-    cmd[5] = crc8(cmd, 5);  
+    // unsigned char cmd[6] = {HEADER_HIGH_BYTE_VERSION, HEADER_LOW_BYTE_VERSION, HEADER_BYTE_HOST, VER_CMD, ID_CMD, CRC};
+    // cmd[5] = crc8(cmd, 5);  
 
 	for(;;)
 	{   
@@ -205,6 +139,17 @@ static void ql_uart_send_task(void *param)
 	    ql_rtos_task_sleep_ms(10000);
 	}
 }
+
+void ql_uart_recv_task(void *param)
+{
+   
+    for(;;)
+    {   
+        ql_uart_register_cb(QL_UART_PORT_1, ql_uart_notify_cb);  
+        ql_rtos_task_sleep_ms(1000);
+    }
+}
+
 
 void ql_uart_init()
 {
@@ -237,40 +182,4 @@ void ql_uart_init()
 	ret = ql_uart_open(QL_UART_PORT_1);
     QL_UART_DEMO_LOG("ret: 0x%x", ret);
 }
-
-void ql_uart_app_init(void)
-{
-    QuecOSStatus err;
-    QuecOSStatus er;
-
-	ql_task_t uart_send_task = NULL;
-    ql_task_t uart_recv_task = NULL;
-
-	ql_uart_init();
-    
-	
-    err = ql_rtos_task_create(&uart_send_task, 1024 * 5, 13, "QUARTDE", ql_uart_send_task, NULL, 7);
-    if (err != QL_OSI_SUCCESS)
-	{
-		QL_UART_DEMO_LOG("demo task created failed");
-        return;
-	}
-    else
-    {
-        QL_UART_DEMO_LOG("demo task created successful");
-    }
-
-    er = ql_rtos_task_create(&uart_recv_task, 16 * 1024, 14, "QUARTDEMO", ql_uart_recv_task, NULL, 6);
-    if (er != QL_OSI_SUCCESS)
-	{
-		QL_UART_DEMO_LOG("demo task created failed");
-        return;
-	}
-    else
-    {
-        QL_UART_DEMO_LOG("demo task created successful");
-    }
-
-}
-
 
