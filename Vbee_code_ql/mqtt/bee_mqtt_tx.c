@@ -1,6 +1,6 @@
 #include "cJSON.h"
 #include "bee_mqtt_tx.h"
-
+#include "bee_mqtt_define_values.h"
 
 
 uint8_t u8Trans_code = 0;
